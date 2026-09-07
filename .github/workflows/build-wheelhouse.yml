@@ -6,7 +6,7 @@ on:
       release_tag:
         description: New immutable GitHub release tag
         required: true
-        default: wheelhouse-cp313-android24-arm64-20260828.1
+        default: wheelhouse-cp313-android24-arm64-20260907.1
         type: string
       publish_release:
         description: Publish verified wheels as a GitHub release
@@ -79,7 +79,8 @@ jobs:
           mkdir -p release
           cp -a "$BUILD_DIR/wheelhouse/." release/
           (cd release && sha256sum -c SHA256SUMS)
-          test "$(find release -maxdepth 1 -name '*.whl' | wc -l)" -eq 10
+          expected="$(python3 -c 'import json; print(len(json.load(open("manifest/wheels.json"))["packages"]))')"
+          test "$(find release -maxdepth 1 -name '*.whl' | wc -l)" -eq "$expected"
           test -s release/index.json
           test -s release/system-packages.txt
           ls -lh release
@@ -113,7 +114,7 @@ jobs:
           $TERMUX_IMAGE
 
           Sources, versions and SHA-256 digests are locked in manifest/wheels.json.
-          Hermes source: NousResearch/hermes-agent@5fc308a70719a83cccdbba4c0e39c23f5a8239d5 (v2026.8.27 / v0.20.6)
+          Hermes source: NousResearch/hermes-agent@29112bef099274229cadff79cdff7bf7b99c4b77 (v2026.8.31 / Hermes 0.21.0)
           Package count: $(grep -Ec '^[A-Za-z0-9_.-]+==' audit/resolved.txt)
 
           Commit: $GITHUB_SHA

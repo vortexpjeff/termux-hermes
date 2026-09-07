@@ -22,6 +22,7 @@ name = "hermes-agent"
 dependencies = [
   "uvicorn[standard]>=0.24,<1",
   "basepkg==1",
+  "nemo-relay>=0.7.1,<0.8; sys_platform == 'linux' and platform_machine == 'aarch64' and 'android' not in platform_release",
   "windows-only==1; sys_platform == 'win32'",
 ]
 [project.optional-dependencies]
@@ -31,13 +32,32 @@ mcp = ["mcp==2.0.0"]
         + "\n",
         encoding="utf-8",
     )
-    requirements = expand_termux_requirements(pyproject, python_version="3.13.15")
+    requirements = expand_termux_requirements(pyproject, python_version="3.13.13")
     assert "uvicorn<1,>=0.24" in requirements
     assert "python-telegram-bot==22.8" in requirements
     assert "mcp==2.0.0" in requirements
     assert all("standard" not in value for value in requirements)
     assert all("webhooks" not in value for value in requirements)
+    assert all("nemo-relay" not in value for value in requirements)
     assert all("windows-only" not in value for value in requirements)
+
+
+def test_termux_excludes_nemo_relay_even_with_pre_gki_kernel_marker(
+    tmp_path: Path,
+) -> None:
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text(
+        """
+[project]
+name = "hermes-agent"
+dependencies = ["nemo-relay>=0.7.1,<0.8"]
+[project.optional-dependencies]
+termux = []
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+    assert expand_termux_requirements(pyproject, python_version="3.13.13") == []
 
 
 def test_missing_profile_or_self_extra_fails_closed(tmp_path: Path) -> None:
@@ -88,8 +108,8 @@ base==1.0
 windows-only==2.0 ; sys_platform == 'win32'
 android-only==3.0 ; sys_platform == 'android'
 """,
-        python_version="3.13.15",
+        python_version="3.13.13",
     )
     assert requirements == ["base==1.0", "android-only==3.0"]
     with pytest.raises(ValueError, match="not exactly pinned"):
-        filter_universal_requirements("demo>=1\n", python_version="3.13.15")
+        filter_universal_requirements("demo>=1\n", python_version="3.13.13")

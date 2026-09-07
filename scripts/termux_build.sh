@@ -18,9 +18,8 @@ case "$BUILD_MODE" in
   *) echo "Unknown build mode: $BUILD_MODE" >&2; exit 1 ;;
 esac
 MANIFEST="$REPO_DIR/manifest/wheels.json"
-PYTHON_DEB="$BUILD_ROOT/python_3.13.15_aarch64.deb"
-PYTHON_URL="https://github.com/adybag14-cyber/termux-python/releases/download/termux-aarch64-20260824.43.1/python_3.13.15_aarch64.deb"
-PYTHON_SHA256="c3038f512f3d95b5c3d4803f3cdd06b43fc09dcb415b3900bd048ef508fbffc3"
+PYTHON_DEB="$BUILD_ROOT/python3.13_3.13.13_aarch64.deb"
+PYTHON_SHA256="f1b37543613eb40afeaaeaf25056bf1d2a7ed851e6f27a25213667cb66545e69"
 
 mkdir -p "$BUILD_ROOT"
 ARCH="$(dpkg --print-architecture 2>/dev/null || true)"
@@ -38,40 +37,29 @@ apt-get update
 dpkg --force-confnew --configure -a
 apt-get -o Dpkg::Options::="--force-confnew" -f install -y
 apt-get -o Dpkg::Options::="--force-confnew" install -y \
-  git curl ca-certificates coreutils dpkg uv clang rust make pkg-config \
+  git curl ca-certificates coreutils dpkg tur-repo uv clang rust make pkg-config \
   binutils patchelf cmake ninja gdbm libandroid-posix-semaphore \
   libandroid-support libbz2 libcrypt libexpat libffi liblzma libsqlite \
   ncurses ncurses-ui-libs openssl readline zlib libjpeg-turbo libpng \
   freetype libwebp openjpeg littlecms libtiff libyaml
+apt-get update
 
-curl -fL --retry 6 --retry-all-errors "$PYTHON_URL" -o "$PYTHON_DEB"
+(cd "$BUILD_ROOT" && rm -f "$(basename "$PYTHON_DEB")" && apt-get download python3.13=3.13.13)
+[ -f "$PYTHON_DEB" ] || { echo "APT did not retrieve $(basename "$PYTHON_DEB")" >&2; exit 1; }
 printf '%s  %s\n' "$PYTHON_SHA256" "$PYTHON_DEB" | sha256sum -c -
-[ "$(dpkg-deb -f "$PYTHON_DEB" Package)" = python ]
-[ "$(dpkg-deb -f "$PYTHON_DEB" Version)" = 3.13.15 ]
+[ "$(dpkg-deb -f "$PYTHON_DEB" Package)" = python3.13 ]
+[ "$(dpkg-deb -f "$PYTHON_DEB" Version)" = 3.13.13 ]
 [ "$(dpkg-deb -f "$PYTHON_DEB" Architecture)" = aarch64 ]
-rm -rf "$BUILD_ROOT/python-root"
-dpkg-deb -x "$PYTHON_DEB" "$BUILD_ROOT/python-root"
-STAGED_PREFIX="$BUILD_ROOT/python-root$PREFIX"
-[ -x "$STAGED_PREFIX/bin/python3.13" ] || { echo "Pinned package lacks python3.13" >&2; exit 1; }
-rm -f \
-  "$STAGED_PREFIX/bin/python" "$STAGED_PREFIX/bin/python3" \
-  "$STAGED_PREFIX/bin/python-config" "$STAGED_PREFIX/bin/python3-config" \
-  "$STAGED_PREFIX/bin/pip" "$STAGED_PREFIX/bin/pip3" \
-  "$STAGED_PREFIX/bin/idle" "$STAGED_PREFIX/bin/idle3" \
-  "$STAGED_PREFIX/bin/pydoc" "$STAGED_PREFIX/bin/pydoc3" \
-  "$STAGED_PREFIX/bin/2to3" \
-  "$STAGED_PREFIX/lib/pkgconfig/python3.pc" \
-  "$STAGED_PREFIX/lib/pkgconfig/python3-embed.pc" \
-  "$STAGED_PREFIX/share/man/man1/python.1.gz" \
-  "$STAGED_PREFIX/share/man/man1/python3.1.gz"
-cp -a "$STAGED_PREFIX/." "$PREFIX/"
+apt-get install -y "$PYTHON_DEB"
+[ "$(dpkg-query -W -f='${Version}' python3.13)" = 3.13.13 ]
+
 PYTHON="$PREFIX/bin/python3.13"
 "$PYTHON" - <<'PY'
 import platform
 import sys
 
 assert sys.platform == "android", sys.platform
-assert sys.version_info[:3] == (3, 13, 15), sys.version
+assert sys.version_info[:3] == (3, 13, 13), sys.version
 assert platform.machine().lower() in {"aarch64", "arm64"}, platform.machine()
 PY
 

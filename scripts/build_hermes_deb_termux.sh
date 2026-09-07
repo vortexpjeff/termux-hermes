@@ -9,7 +9,7 @@ PACKAGE_VERSION="${4:?package version is required}"
 WHEELHOUSE_TAG="${5:?wheelhouse release tag is required}"
 WHEELHOUSE_SUMS_SHA256="${6:?wheelhouse SHA256SUMS digest is required}"
 SOURCE_REPOSITORY="${HERMES_SOURCE_REPOSITORY:-NousResearch/hermes-agent}"
-WHEELHOUSE_REPOSITORY="${HERMES_WHEELHOUSE_REPOSITORY:-adybag14-cyber/termux-hermes}"
+WHEELHOUSE_REPOSITORY="${HERMES_WHEELHOUSE_REPOSITORY:?wheelhouse repository is required}"
 PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
 BUILD_HOME="${TMPDIR:-$PREFIX/tmp}/hermes-agent-deb-home"
 APP="$PREFIX/lib/hermes-agent/app"
@@ -30,10 +30,16 @@ mkdir -p "$OUTPUT_DIR" "$APP" "$WHEELHOUSE"
 printf '%s\n' 'deb https://packages.termux.dev/apt/termux-main stable main' > \
   "$PREFIX/etc/apt/sources.list"
 apt-get update
-apt-get install -y ca-certificates curl git gnupg
-bash <(curl -fsSL --retry 5 --retry-all-errors \
-  https://raw.githubusercontent.com/adybag14-cyber/termux-python/main/scripts/setup_apt_repo.sh)
-apt-get install -y python3.13 uv
+apt-get install -y ca-certificates curl git gnupg tur-repo
+apt-get update
+PYTHON_DEB="$BUILD_HOME/python3.13_3.13.13_aarch64.deb"
+(cd "$BUILD_HOME" && apt-get download python3.13=3.13.13)
+printf '%s  %s\n' f1b37543613eb40afeaaeaf25056bf1d2a7ed851e6f27a25213667cb66545e69 "$PYTHON_DEB" | sha256sum -c -
+[ "$(dpkg-deb -f "$PYTHON_DEB" Package)" = python3.13 ]
+[ "$(dpkg-deb -f "$PYTHON_DEB" Version)" = 3.13.13 ]
+[ "$(dpkg-deb -f "$PYTHON_DEB" Architecture)" = aarch64 ]
+apt-get install -y "$PYTHON_DEB" uv
+[ "$(dpkg-query -W -f='${Version}' python3.13)" = 3.13.13 ]
 
 git config --global --add safe.directory "$SOURCE_TREE"
 test "$(git -C "$SOURCE_TREE" rev-parse HEAD)" = "$SOURCE_COMMIT"
@@ -57,7 +63,14 @@ while read -r checksum filename; do
       ;;
   esac
 done < "$WHEELHOUSE/SHA256SUMS"
-[ "$wheel_count" -eq 10 ] || { echo "Expected 10 native wheels, got $wheel_count" >&2; exit 1; }
+expected_wheels="$("$PREFIX/bin/python3.13" - "$PACKAGING_ROOT/manifest/wheels.json" <<'PY'
+import json
+import sys
+
+print(len(json.load(open(sys.argv[1]))["packages"]))
+PY
+)"
+[ "$wheel_count" -eq "$expected_wheels" ] || { echo "Expected $expected_wheels native wheels, got $wheel_count" >&2; exit 1; }
 
 uv venv --python "$PREFIX/bin/python3.13" "$APP/venv"
 VENV_PY="$APP/venv/bin/python"
@@ -66,8 +79,9 @@ uv pip install --python "$VENV_PY" \
   --constraint "$PACKAGING_ROOT/audit/lock-constraints.txt" \
   --find-links "$WHEELHOUSE" \
   --only-binary :all:
-uv pip install --python "$VENV_PY" --no-deps --editable "$APP"
+uv pip install --python "$VENV_PY" --no-deps "$APP"
 uv pip check --python "$VENV_PY"
+! uv pip show --python "$VENV_PY" nemo-relay >/dev/null 2>&1
 
 cat > "$PREFIX/bin/hermes" <<EOF
 #!/data/data/com.termux/files/usr/bin/bash
@@ -76,26 +90,24 @@ EOF
 chmod 0755 "$PREFIX/bin/hermes"
 
 "$PREFIX/bin/hermes" --version
-"$VENV_PY" - <<'PY'
+"$VENV_PY" - "$PACKAGING_ROOT/manifest/wheels.json" <<'PY'
 import importlib
+import json
+import sys
 
-for module in (
+manifest = json.load(open(sys.argv[1]))
+modules = [module for package in manifest["packages"] for module in package["imports"]]
+modules.extend((
     "hermes_cli",
-    "psutil",
-    "yaml",
-    "cffi",
-    "PIL",
-    "pydantic_core",
-    "cryptography",
-    "jiter",
-    "rpds",
     "mcp",
     "httpx2",
     "snowballstemmer",
     "telegram",
-):
+))
+for module in modules:
     importlib.import_module(module)
-print("Hermes 0.20.6 native packaged-runtime import smoke passed")
+from hermes_cli import __version__
+print(f"Hermes {__version__} native packaged-runtime import smoke passed")
 PY
 
 find "$APP" -type d -name __pycache__ -prune -exec rm -rf {} + || true

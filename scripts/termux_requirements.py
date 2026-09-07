@@ -14,6 +14,12 @@ from packaging.requirements import Requirement
 from packaging.utils import canonicalize_name
 
 SELF_NAME = "hermes-agent"
+DROP_PACKAGES = {
+    # Some pre-GKI Android kernels omit "android" from platform.release(), so
+    # upstream's Linux/aarch64 marker can select this unavailable native wheel.
+    # This generator is Termux-specific; upstream/non-Android installs retain it.
+    "nemo-relay",
+}
 DROP_EXTRAS = {
     # The pure-Python Uvicorn/H11 path is reliable on Android. Its standard
     # accelerators do not publish PEP 738 wheels and are not required.
@@ -80,6 +86,8 @@ def expand_termux_requirements(
                     raise ValueError(f"Hermes self-extra is missing: {extra}")
                 expanded_extras.add(extra)
                 pending.extend(extras_table[extra])
+            continue
+        if name in DROP_PACKAGES:
             continue
         if req.marker and not req.marker.evaluate(marker_env):
             continue
@@ -167,7 +175,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--resolved", type=Path)
     parser.add_argument("--uv", default="uv")
     parser.add_argument("--profile", default="termux")
-    parser.add_argument("--python-version", default="3.13.15")
+    parser.add_argument("--python-version", default="3.13.13")
     args = parser.parse_args(argv)
     requirements = expand_termux_requirements(
         args.pyproject, profile=args.profile, python_version=args.python_version

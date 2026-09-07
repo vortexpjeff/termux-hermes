@@ -10,9 +10,9 @@ from scripts import package_hermes_agent
 
 
 def test_runtime_python_contract_accepts_only_compatible_313() -> None:
-    assert "python3.13 (>= 3.13.15) | python (>= 3.13)" in package_hermes_agent.RUNTIME_DEPS
-    assert "python3.13 (>= 3.13.15) | python (<< 3.14)" in package_hermes_agent.RUNTIME_DEPS
-    assert "python3.13 (>= 3.13.15)" not in package_hermes_agent.RUNTIME_DEPS
+    assert "python3.13 (>= 3.13.13) | python (>= 3.13)" in package_hermes_agent.RUNTIME_DEPS
+    assert "python3.13 (>= 3.13.13) | python (<< 3.14)" in package_hermes_agent.RUNTIME_DEPS
+    assert "python3.13 (>= 3.13.13)" not in package_hermes_agent.RUNTIME_DEPS
 
 
 @pytest.mark.skipif(shutil.which("dpkg-deb") is None, reason="dpkg-deb is required")
@@ -36,9 +36,9 @@ def test_built_control_contains_both_python_alternatives(tmp_path: Path, monkeyp
             "--launcher",
             str(launcher),
             "--version",
-            "0.20.6+termux2",
+            "0.21.0+termux1",
             "--hermes-version",
-            "0.20.6",
+            "0.21.0",
             "--source-commit",
             "a" * 40,
             "--source-repository",
@@ -54,7 +54,7 @@ def test_built_control_contains_both_python_alternatives(tmp_path: Path, monkeyp
         ],
     )
     assert package_hermes_agent.main() == 0
-    deb = output / "hermes-agent_0.20.6+termux2_aarch64.deb"
+    deb = output / "hermes-agent_0.21.0+termux1_aarch64.deb"
     depends = subprocess.check_output(["dpkg-deb", "-f", deb, "Depends"], text=True)
-    assert "python3.13 (>= 3.13.15) | python (>= 3.13)" in depends
-    assert "python3.13 (>= 3.13.15) | python (<< 3.14)" in depends
+    assert "python3.13 (>= 3.13.13) | python (>= 3.13)" in depends
+    assert "python3.13 (>= 3.13.13) | python (<< 3.14)" in depends

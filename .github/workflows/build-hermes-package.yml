@@ -6,22 +6,22 @@ on:
       hermes_commit:
         description: Exact NousResearch/hermes-agent release commit to package
         required: true
-        default: 5fc308a70719a83cccdbba4c0e39c23f5a8239d5
+        default: 29112bef099274229cadff79cdff7bf7b99c4b77
         type: string
       package_version:
         description: Debian package version
         required: true
-        default: 0.20.6+termux2
+        default: 0.21.0+termux1
         type: string
       release_tag:
         description: New immutable GitHub release tag
         required: true
-        default: hermes-agent-termux-0.20.6-20260829.1
+        default: hermes-agent-termux-0.21.0-20260907.1
         type: string
       wheelhouse_tag:
         description: Verified immutable termux-hermes wheelhouse release tag
         required: true
-        default: wheelhouse-cp313-android24-arm64-20260828.1
+        default: wheelhouse-cp313-android24-arm64-20260907.1
         type: string
       publish_release:
         description: Publish verified .deb as a GitHub release
@@ -62,16 +62,18 @@ jobs:
           WHEELHOUSE_TAG: ${{ inputs.wheelhouse_tag }}
           PUBLISH_RELEASE: ${{ inputs.publish_release }}
           GH_TOKEN: ${{ github.token }}
+          EXPECTED_HERMES_COMMIT: 29112bef099274229cadff79cdff7bf7b99c4b77
         run: |
           set -Eeuo pipefail
+          test "$HERMES_COMMIT" = "$EXPECTED_HERMES_COMMIT"
           test "$(git -C hermes-source rev-parse HEAD)" = "$HERMES_COMMIT"
           case "$PACKAGE_VERSION" in
             *[!0-9A-Za-z.+:~_-]*) echo "Invalid Debian package version" >&2; exit 1 ;;
           esac
           source_version="$(python3 -c 'import tomllib; print(tomllib.load(open("hermes-source/pyproject.toml", "rb"))["project"]["version"])')"
-          test "$PACKAGE_VERSION" = "$source_version+termux2"
+          test "$PACKAGE_VERSION" = "$source_version+termux1"
           sums_digest="$(gh release view "$WHEELHOUSE_TAG" \
-            --repo adybag14-cyber/termux-hermes \
+            --repo "$GITHUB_REPOSITORY" \
             --json assets \
             --jq '.assets[] | select(.name == "SHA256SUMS") | .digest')"
           case "$sums_digest" in sha256:[0-9a-f][0-9a-f]*) ;; *) echo "Wheelhouse SHA256SUMS digest missing" >&2; exit 1;; esac
@@ -109,6 +111,7 @@ jobs:
           docker run --rm --privileged \
             --security-opt seccomp=unconfined \
             -e CI=true \
+            -e HERMES_WHEELHOUSE_REPOSITORY="$GITHUB_REPOSITORY" \
             -v "$GITHUB_WORKSPACE:/termux-hermes:ro" \
             -v "$GITHUB_WORKSPACE/hermes-source:/hermes-source:ro" \
             -v "$OUT:/out" \
@@ -131,8 +134,8 @@ jobs:
           test "$(dpkg-deb -f "$DEB" Version)" = "$PACKAGE_VERSION"
           test "$(dpkg-deb -f "$DEB" Architecture)" = aarch64
           depends="$(dpkg-deb -f "$DEB" Depends)"
-          grep -F 'python3.13 (>= 3.13.15) | python (>= 3.13)' <<<"$depends"
-          grep -F 'python3.13 (>= 3.13.15) | python (<< 3.14)' <<<"$depends"
+          grep -F 'python3.13 (>= 3.13.13) | python (>= 3.13)' <<<"$depends"
+          grep -F 'python3.13 (>= 3.13.13) | python (<< 3.14)' <<<"$depends"
           rm -rf "$RUNNER_TEMP/hermes-unpack"
           dpkg-deb -x "$DEB" "$RUNNER_TEMP/hermes-unpack"
           APP="$RUNNER_TEMP/hermes-unpack/data/data/com.termux/files/usr/lib/hermes-agent/app"
@@ -146,8 +149,9 @@ jobs:
           data=json.loads(Path("$META").read_text())
           assert data["source_commit"] == "$HERMES_COMMIT"
           assert data["source_repository"] == "NousResearch/hermes-agent"
+          assert data["wheelhouse_repository"] == "${{ github.repository }}"
           assert data["package_version"] == "$PACKAGE_VERSION"
-          assert data["hermes_version"] == "0.20.6"
+          assert data["hermes_version"] == "$PACKAGE_VERSION".split("+", 1)[0]
           assert data["target"] == "aarch64-linux-android/Termux"
           print(json.dumps(data, indent=2, sort_keys=True))
           PY
@@ -168,8 +172,18 @@ jobs:
               TMPDIR="${TMPDIR:-$PREFIX/tmp}"
               mkdir -p "$TMPDIR"
               printf "%s\n" "deb https://packages.termux.dev/apt/termux-main stable main" > "$PREFIX/etc/apt/sources.list"
-              pkg update -y
-              bash <(curl -fsSL https://raw.githubusercontent.com/adybag14-cyber/termux-python/main/scripts/setup_apt_repo.sh)
+              apt-get update
+              apt-get install -y tur-repo
+              apt-get update
+              cd "$TMPDIR"
+              apt-get download python3.13=3.13.13
+              python_deb="$TMPDIR/python3.13_3.13.13_aarch64.deb"
+              printf "%s  %s\n" f1b37543613eb40afeaaeaf25056bf1d2a7ed851e6f27a25213667cb66545e69 "$python_deb" | sha256sum -c -
+              test "$(dpkg-deb -f "$python_deb" Package)" = python3.13
+              test "$(dpkg-deb -f "$python_deb" Version)" = 3.13.13
+              test "$(dpkg-deb -f "$python_deb" Architecture)" = aarch64
+              apt-get install -y "$python_deb"
+              test "$(dpkg-query -W -f="\${Version}" python3.13)" = 3.13.13
               apt install -y "/packages/hermes-agent_'"$PACKAGE_VERSION"'_aarch64.deb"
               dpkg-query -W -f="\${Status}\n" hermes-agent | grep -Fx "install ok installed"
               ! dpkg-query -W python >/dev/null 2>&1
@@ -184,54 +198,44 @@ jobs:
               test ! -e "$PREFIX/lib/hermes-agent/app/.git"
               "$PREFIX/lib/hermes-agent/app/venv/bin/python" - <<"PY"
           import importlib
-          for module in ("hermes_cli", "psutil", "yaml", "cffi", "PIL", "pydantic_core", "cryptography", "jiter", "rpds", "mcp", "httpx2", "snowballstemmer", "telegram"):
+          for module in ("hermes_cli", "psutil", "yaml", "cffi", "PIL", "pydantic_core", "cryptography", "jiter", "rpds", "anydoc", "anydoc._anydoc", "mcp", "httpx2", "snowballstemmer", "telegram"):
               importlib.import_module(module)
           print("Fresh installed Hermes runtime imports passed")
           PY
             '
 
-      - name: Existing Termux Python 3.13 compatibility smoke
+      - name: Clean Termux smoke against signed TUR Python 3.13.13
         env:
           PACKAGE_VERSION: ${{ inputs.package_version }}
         run: |
           set -Eeuo pipefail
           OUT="$RUNNER_TEMP/hermes-agent-deb"
-          PYTHON_DEB="$OUT/python_3.13.15_aarch64.deb"
-          curl -fL --retry 6 --retry-all-errors \
-            https://github.com/adybag14-cyber/termux-python/releases/download/termux-aarch64-20260824.43.1/python_3.13.15_aarch64.deb \
-            -o "$PYTHON_DEB"
-          printf '%s  %s\n' \
-            c3038f512f3d95b5c3d4803f3cdd06b43fc09dcb415b3900bd048ef508fbffc3 \
-            "$PYTHON_DEB" | sha256sum -c -
-          docker run --rm --privileged \
-            --security-opt seccomp=unconfined \
-            -v "$OUT:/packages:ro" \
-            "$TERMUX_IMAGE" \
-            /entrypoint.sh bash -lc '
+          docker run --rm --privileged --security-opt seccomp=unconfined \
+            -v "$OUT:/packages:ro" "$TERMUX_IMAGE" /entrypoint.sh bash -lc '
               set -Eeuo pipefail
               printf "%s\n" "deb https://packages.termux.dev/apt/termux-main stable main" > "$PREFIX/etc/apt/sources.list"
-              pkg update -y
-              python_deb=/packages/python_3.13.15_aarch64.deb
-              hermes_deb=/packages/hermes-agent_'"$PACKAGE_VERSION"'_aarch64.deb
-              python_deps="$(dpkg-deb -f "$python_deb" Depends)"
-              apt-get satisfy -y "$python_deps"
-              dpkg -i "$python_deb"
-              apt-mark hold python
-              test "$(python3.13 -c "import sys; print(f\"{sys.version_info.major}.{sys.version_info.minor}\")")" = 3.13
-              hermes_deps="$(dpkg-deb -f "$hermes_deb" Depends)"
-              apt-get satisfy -y "$hermes_deps"
-              dpkg -i "$hermes_deb"
-              dpkg --configure -a
-              test "$(dpkg-query -W -f="\${db:Status-Status}" python)" = installed
-              ! dpkg-query -W python3.13 >/dev/null 2>&1
-              test "$(dpkg-query -W -f="\${db:Status-Status}" hermes-agent)" = installed
+              apt-get update
+              apt-get install -y tur-repo
+              apt-get update
+              cd "${TMPDIR:-$PREFIX/tmp}"
+              apt-get download python3.13=3.13.13
+              python_deb="$PWD/python3.13_3.13.13_aarch64.deb"
+              printf "%s  %s\n" f1b37543613eb40afeaaeaf25056bf1d2a7ed851e6f27a25213667cb66545e69 "$python_deb" | sha256sum -c -
+              test "$(dpkg-deb -f "$python_deb" Package)" = python3.13
+              test "$(dpkg-deb -f "$python_deb" Version)" = 3.13.13
+              test "$(dpkg-deb -f "$python_deb" Architecture)" = aarch64
+              apt-get install -y "$python_deb"
+              test "$(dpkg-query -W -f="\${Version}" python3.13)" = 3.13.13
+              test "$(python3.13 -c "import platform; print(platform.python_version())")" = 3.13.13
+              apt install -y "/packages/hermes-agent_'"$PACKAGE_VERSION"'_aarch64.deb"
               test -z "$(dpkg --audit)"
               hermes --version
               "$PREFIX/lib/hermes-agent/app/venv/bin/python" - <<"PY"
           import importlib
-          for module in ("hermes_cli", "psutil", "yaml", "cffi", "PIL", "pydantic_core", "cryptography", "jiter", "rpds"):
-              importlib.import_module(module)
-          print("Existing Termux Python 3.13 compatibility smoke passed")
+          import importlib.util
+          importlib.import_module("anydoc")
+          importlib.import_module("anydoc._anydoc")
+          assert importlib.util.find_spec("nemo_relay") is None
           PY
             '
 
@@ -259,13 +263,13 @@ jobs:
           cat > "$OUT/release-notes.md" <<EOF
           Native Hermes Agent package for Termux aarch64.
 
-          Install source: NousResearch/hermes-agent@$HERMES_COMMIT (v2026.8.27 / Hermes 0.20.6)
+          Install source: NousResearch/hermes-agent@$HERMES_COMMIT (v2026.8.31 / Hermes 0.21.0)
           Package version: $PACKAGE_VERSION
           Build userspace: $TERMUX_IMAGE
           Python: compatible installed Termux Python 3.13 or side-by-side signed APT package python3.13
           Hermes native dependency wheelhouse: ${{ inputs.wheelhouse_tag }} (recorded in BUILD-METADATA.json)
 
-          This workflow installs Hermes in the official aarch64 Termux userspace, validates native imports, packages the complete runtime/source assets and venv, then validates both a fresh side-by-side Python install and an existing Termux Python 3.13 before release.
+          This workflow installs Hermes in the official aarch64 Termux userspace, validates native imports, packages the complete runtime/source assets and venv, then validates two clean installation paths against signed TUR Python 3.13.13 before release.
           EOF
           # Publish through a draft so repository-level immutable releases lock
           # the tag only after every verified asset is attached.
