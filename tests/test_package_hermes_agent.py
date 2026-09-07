@@ -15,6 +15,12 @@ def test_runtime_python_contract_accepts_only_compatible_313() -> None:
     assert "python3.13 (>= 3.13.13)" not in package_hermes_agent.RUNTIME_DEPS
 
 
+def test_package_maintainer_identifies_the_fork_packager() -> None:
+    source = Path(package_hermes_agent.__file__).read_text("utf-8")
+    assert "Maintainer: Vortex Project <vortexpjeff@users.noreply.github.com>" in source
+    assert "Maintainer: adybag14-cyber" not in source
+
+
 @pytest.mark.skipif(shutil.which("dpkg-deb") is None, reason="dpkg-deb is required")
 def test_built_control_contains_both_python_alternatives(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     app = tmp_path / "app"

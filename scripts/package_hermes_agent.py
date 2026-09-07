@@ -113,7 +113,7 @@ def main() -> int:
             f"""Package: hermes-agent
 Version: {args.version}
 Architecture: aarch64
-Maintainer: adybag14-cyber <adybag14-cyber@users.noreply.github.com>
+Maintainer: Vortex Project <vortexpjeff@users.noreply.github.com>
 Depends: {depends}
 Suggests: ffmpeg, nodejs (>= 22), uv, wrangler
 Section: utils
