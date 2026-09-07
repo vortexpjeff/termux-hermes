@@ -79,7 +79,8 @@
         "url": "https://files.pythonhosted.org/packages/source/f/firecrawl-anydoc/firecrawl_anydoc-0.2.4.tar.gz"
       },
       "strategy": "maturin",
-      "version": "0.2.4"
+      "version": "0.2.4",
+      "force_link_libpython": true
     },
     {
       "build_backend": "setuptools.build_meta",

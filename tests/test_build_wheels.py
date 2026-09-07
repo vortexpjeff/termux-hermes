@@ -203,10 +203,12 @@ def test_verify_wheel_enforces_android_libpython_needed(tmp_path: Path, monkeypa
     builder.verify_wheel(wheel, package, "android_24_arm64_v8a")
 
 
-def test_manifest_marks_cryptography_for_libpython_linking() -> None:
+def test_manifest_marks_android_abi3_extensions_for_libpython_linking() -> None:
     manifest = json.loads((ROOT / "manifest" / "wheels.json").read_text("utf-8"))
     cryptography = next(package for package in manifest["packages"] if package["name"] == "cryptography")
+    anydoc = next(package for package in manifest["packages"] if package["name"] == "firecrawl-anydoc")
     assert cryptography["force_link_libpython"] is True
+    assert anydoc["force_link_libpython"] is True
 
 
 def test_smoke_import_package_uses_requested_neutral_cwd(tmp_path: Path, monkeypatch) -> None:
