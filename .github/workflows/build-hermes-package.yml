@@ -111,14 +111,13 @@ jobs:
           docker run --rm --privileged \
             --security-opt seccomp=unconfined \
             -e CI=true \
-            -e HERMES_WHEELHOUSE_REPOSITORY="$GITHUB_REPOSITORY" \
             -v "$GITHUB_WORKSPACE:/termux-hermes:ro" \
             -v "$GITHUB_WORKSPACE/hermes-source:/hermes-source:ro" \
             -v "$OUT:/out" \
             "$TERMUX_IMAGE" \
             bash /termux-hermes/scripts/build_hermes_deb_termux.sh \
               /hermes-source /out "$HERMES_COMMIT" "$PACKAGE_VERSION" \
-              "$WHEELHOUSE_TAG" "$WHEELHOUSE_SUMS_SHA256"
+              "$WHEELHOUSE_TAG" "$WHEELHOUSE_SUMS_SHA256" "$GITHUB_REPOSITORY"
           test -s "$OUT/hermes-agent_${PACKAGE_VERSION}_aarch64.deb"
           (cd "$OUT" && sha256sum -c SHA256SUMS)
 

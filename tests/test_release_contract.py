@@ -40,7 +40,9 @@ def test_workflows_derive_wheel_count_and_route_to_current_repository() -> None:
     assert 'len(json.load(open("manifest/wheels.json"))["packages"])' in wheel_workflow
     assert 'len(json.load(open(sys.argv[1]))["packages"])' in build_script
     assert '--repo "$GITHUB_REPOSITORY"' in package_workflow
-    assert '-e HERMES_WHEELHOUSE_REPOSITORY="$GITHUB_REPOSITORY"' in package_workflow
+    assert '-e HERMES_WHEELHOUSE_REPOSITORY=' not in package_workflow
+    assert '"$WHEELHOUSE_TAG" "$WHEELHOUSE_SUMS_SHA256" "$GITHUB_REPOSITORY"' in package_workflow
+    assert 'WHEELHOUSE_REPOSITORY="${7:?wheelhouse repository is required}"' in build_script
     assert "adybag14-cyber/termux-hermes" not in package_workflow
 
 

@@ -9,7 +9,7 @@ PACKAGE_VERSION="${4:?package version is required}"
 WHEELHOUSE_TAG="${5:?wheelhouse release tag is required}"
 WHEELHOUSE_SUMS_SHA256="${6:?wheelhouse SHA256SUMS digest is required}"
 SOURCE_REPOSITORY="${HERMES_SOURCE_REPOSITORY:-NousResearch/hermes-agent}"
-WHEELHOUSE_REPOSITORY="${HERMES_WHEELHOUSE_REPOSITORY:?wheelhouse repository is required}"
+WHEELHOUSE_REPOSITORY="${7:?wheelhouse repository is required}"
 PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
 BUILD_HOME="${TMPDIR:-$PREFIX/tmp}/hermes-agent-deb-home"
 APP="$PREFIX/lib/hermes-agent/app"
@@ -21,6 +21,13 @@ case "$WHEELHOUSE_SUMS_SHA256" in
   *[!0-9a-f]*|'') echo "Invalid wheelhouse SHA-256" >&2; exit 1;;
 esac
 [ "${#WHEELHOUSE_SUMS_SHA256}" -eq 64 ] || { echo "Invalid wheelhouse SHA-256 length" >&2; exit 1; }
+case "$WHEELHOUSE_REPOSITORY" in
+  */*) ;;
+  *) echo "Invalid wheelhouse repository" >&2; exit 1;;
+esac
+case "$WHEELHOUSE_REPOSITORY" in
+  *[!A-Za-z0-9._/-]*|*/*/*|/*|*/) echo "Invalid wheelhouse repository" >&2; exit 1;;
+esac
 
 rm -rf "$BUILD_HOME" "$APP"
 mkdir -p "$OUTPUT_DIR" "$APP" "$WHEELHOUSE"
