@@ -59,6 +59,13 @@ def test_package_build_is_locked_binary_only_and_metadata_is_dynamic() -> None:
     assert 'assert data["hermes_version"] == "0.20.6"' not in workflow
 
 
+def test_package_build_installs_declared_runtime_system_dependencies_before_smoke() -> None:
+    script = (ROOT / "scripts/build_hermes_deb_termux.sh").read_text("utf-8")
+    assert 'runpy.run_path(sys.argv[1])["RUNTIME_DEPS"]' in script
+    assert 'package not in {"python", "python3.13"}' in script
+    assert 'apt-get install -y "${RUNTIME_SYSTEM_PACKAGES[@]}"' in script
+
+
 def test_clean_container_smoke_pins_tur_python_31313() -> None:
     workflow = (ROOT / ".github/workflows/build-hermes-package.yml").read_text("utf-8")
     assert "Clean Termux smoke against signed TUR Python 3.13.13" in workflow

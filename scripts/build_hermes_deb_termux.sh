@@ -48,6 +48,20 @@ printf '%s  %s\n' f1b37543613eb40afeaaeaf25056bf1d2a7ed851e6f27a25213667cb66545e
 apt-get install -y "$PYTHON_DEB" uv
 [ "$(dpkg-query -W -f='${Version}' python3.13)" = 3.13.13 ]
 
+readarray -t RUNTIME_SYSTEM_PACKAGES < <("$PREFIX/bin/python3.13" - "$PACKAGING_ROOT/scripts/package_hermes_agent.py" <<'PY'
+import runpy
+import sys
+
+runtime_deps = runpy.run_path(sys.argv[1])["RUNTIME_DEPS"]
+for dependency in runtime_deps:
+    package = dependency.split()[0]
+    if package not in {"python", "python3.13"}:
+        print(package)
+PY
+)
+[ "${#RUNTIME_SYSTEM_PACKAGES[@]}" -gt 0 ] || { echo "No runtime system packages resolved" >&2; exit 1; }
+apt-get install -y "${RUNTIME_SYSTEM_PACKAGES[@]}"
+
 git config --global --add safe.directory "$SOURCE_TREE"
 test "$(git -C "$SOURCE_TREE" rev-parse HEAD)" = "$SOURCE_COMMIT"
 cp -a "$SOURCE_TREE/." "$APP/"
