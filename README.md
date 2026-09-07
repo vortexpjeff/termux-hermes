@@ -1,8 +1,31 @@
-# Termux Hermes Immutable Wheelhouse
+# Hermes Agent for ARM64 Termux
 
-This repository builds the native Python wheels required by the Hermes Agent
-Termux profile so phones can install binary wheels instead of compiling C and
-Rust packages locally.
+This repository is a pinned, integrity-verified packaging and release pipeline
+for running Hermes Agent on ARM64 Termux. It builds the Android-native Python
+wheelhouse and a complete APT-managed `hermes-agent` package so
+resource-constrained devices do not compile the Rust and C dependency graph
+locally.
+
+## Repository scope
+
+This repository contains:
+
+- pinned source, interpreter, container, and dependency manifests;
+- native Android wheel builders and integrity checks;
+- a complete Termux `.deb` packager with clean-container installation smokes;
+- immutable release workflows and a separately maintained recovery path.
+
+It is distribution infrastructure, not a fork of the Hermes Agent application.
+Device identities, credentials, provider configuration, conversations, and
+post-install device experiments are not package inputs and are not published in
+release artifacts.
+
+| Surface | Current status |
+| --- | --- |
+| Public recovery script | Installs the established `0.20.6+termux2` package |
+| Hermes 0.21 package | Verified immutable `0.21.0+termux1` ARM64 release |
+| Python runtime | Signed TUR `python3.13=3.13.13` |
+| Supported target | Official Termux-compatible ARM64 Android userspace |
 
 ## One-command install and recovery
 
@@ -36,30 +59,54 @@ positive output cap.
 
 ## Native `pkg install hermes-agent` package
 
-The public recovery script remains pinned to the last published Debian package, `0.20.6+termux2`; no 0.21.0 package digest is recorded until CI produces the artifact. The next package build defaults to `0.21.0+termux1`. Its Python dependency
-accepts an installed Termux `python` package in the 3.13 series; otherwise it
-uses the signed side-by-side `python3.13` package. This avoids overlapping
-ownership of `pydoc3.13` while keeping Hermes on its verified CPython 3.13 ABI
-after rolling Termux advances to Python 3.14.
+The public recovery script remains pinned to the last published Debian package,
+`0.20.6+termux2`; it does not yet install the verified `0.21.0+termux1` artifact.
+The 0.21.0 package's Python dependency accepts an installed Termux `python`
+package in the 3.13 series; otherwise it uses the signed side-by-side
+`python3.13` package. This avoids overlapping ownership of `pydoc3.13` while
+keeping Hermes on its verified CPython 3.13 ABI after rolling Termux advances to
+Python 3.14.
 
 This repository also builds a complete native Termux `.deb` for Hermes Agent. The package is not a thin Python wheel: it contains the full Hermes runtime/source assets and a prevalidated CPython 3.13 virtual environment produced by the existing immutable Android wheelhouse flow. The package is stamped as an APT-managed install, so `hermes update` does not mutate package-owned files and instead directs users to `pkg upgrade hermes-agent`.
 
-For the 0.21.0 candidate, install the versioned interpreter through the `tur-repo`
-package shipped by official Termux main, then install the locally verified Hermes
-artifact by path:
+## Verified 0.21 package
+
+The immutable package release is available at
+[`hermes-agent-termux-0.21.0-20260907.1`](https://github.com/vortexpjeff/termux-hermes/releases/tag/hermes-agent-termux-0.21.0-20260907.1):
+
+```text
+hermes-agent_0.21.0+termux1_aarch64.deb
+SHA-256: 531d4afbe88f75f5092f95b874979c410e71b0a0778864ee4095ec64110bb9e8
+```
+
+After enabling `tur-repo`, the package installation path is:
 
 ```bash
 pkg install tur-repo
 pkg update
 pkg install python3.13=3.13.13
-apt install ./hermes-agent_0.21.0+termux1_aarch64.deb
+
+package="${TMPDIR:-$PREFIX/tmp}/hermes-agent_0.21.0+termux1_aarch64.deb"
+curl -fL --retry 6 --retry-all-errors \
+  https://github.com/vortexpjeff/termux-hermes/releases/download/hermes-agent-termux-0.21.0-20260907.1/hermes-agent_0.21.0%2Btermux1_aarch64.deb \
+  -o "$package"
+printf '%s  %s\n' \
+  531d4afbe88f75f5092f95b874979c410e71b0a0778864ee4095ec64110bb9e8 \
+  "$package" | sha256sum -c -
+apt install "$package"
+rm -f "$package"
 ```
 
-Do not use the contributor Python repository for this candidate. The package and
-its wheelhouse remain fork-local immutable artifacts until their native ARM build,
-clean-container tests, checksums, and HermesCar smoke test pass. The older public
-recovery command at the top of this README remains pinned to the separately
-published `0.20.6+termux2` package.
+The release passed package-contract inspection, two clean Termux installation
+smokes against signed TUR Python 3.13.13, native-extension imports, package
+consistency, and `hermes --version`. A separate physical ARM64 Android 10/API 29
+installation also passed dpkg installation, CLI startup, native imports, and a
+bounded provider turn.
+
+Device identity, credentials, provider-specific compatibility changes,
+persistence, power behavior, and fleet integration remain deployment concerns.
+They are deliberately excluded from this generic wheelhouse/package repository
+and are not claims made by the published 0.21.0 artifact.
 
 `build-hermes-package.yml` builds on a native ARM GitHub runner in the pinned official Termux Docker userspace, installs Hermes through the native installer, validates the runtime imports, assembles the `.deb`, and installs that `.deb` into a second clean Termux container before an immutable GitHub release may be published. `apt-hermes-smoke.yml` separately validates installation from the live signed APT repository.
 
