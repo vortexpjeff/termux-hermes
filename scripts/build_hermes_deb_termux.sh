@@ -86,7 +86,7 @@ uv pip install --python "$VENV_PY" \
   --constraint "$PACKAGING_ROOT/audit/lock-constraints.txt" \
   --find-links "$WHEELHOUSE" \
   --only-binary :all:
-uv pip install --python "$VENV_PY" --no-deps "$APP"
+uv pip install --python "$VENV_PY" --no-deps --editable "$APP"
 uv pip check --python "$VENV_PY"
 ! uv pip show --python "$VENV_PY" nemo-relay >/dev/null 2>&1
 

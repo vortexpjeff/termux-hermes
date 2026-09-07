@@ -52,8 +52,7 @@ def test_package_build_is_locked_binary_only_and_metadata_is_dynamic() -> None:
     assert '--requirements "$PACKAGING_ROOT/audit/resolved.txt"' in script
     assert '--constraint "$PACKAGING_ROOT/audit/lock-constraints.txt"' in script
     assert "--only-binary :all:" in script
-    assert 'uv pip install --python "$VENV_PY" --no-deps "$APP"' in script
-    assert "--editable" not in script
+    assert 'uv pip install --python "$VENV_PY" --no-deps --editable "$APP"' in script
     assert "nemo-relay" in script
     assert 'test "$HERMES_VERSION" = "${PACKAGE_VERSION%%+*}"' in script
     assert 'data["hermes_version"] == "$PACKAGE_VERSION".split("+", 1)[0]' in workflow
